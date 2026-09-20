@@ -32,6 +32,14 @@ export async function getCurrentWeather(stationId: string): Promise<Observation 
   return res.json();
 }
 
+export async function getRecentHistory(stationId: string, hours: number): Promise<Observation[]> {
+  const url = new URL(`${API_BASE_URL}/weather/history/${stationId}`);
+  url.searchParams.set("hours", String(hours));
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function getAnomalyEvents(stationId?: string): Promise<AnomalyEvent[]> {
   const url = new URL(`${API_BASE_URL}/anomaly/events`);
   if (stationId) url.searchParams.set("station_id", stationId);

@@ -16,3 +16,7 @@ npm-cache/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local tunnel
+cloudflared.log
+cloudflared.err.log

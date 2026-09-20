@@ -46,6 +46,20 @@ export async function getNearestStation(lat: number, lon: number): Promise<Stati
   return res.json();
 }
 
+export interface GeocodeResult {
+  display_name: string;
+  lat: number;
+  lon: number;
+}
+
+export async function geocodeAddress(query: string): Promise<GeocodeResult[]> {
+  const url = new URL(`${API_BASE_URL}/geocode/search`);
+  url.searchParams.set("q", query);
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function getCurrentWeather(stationId: string): Promise<Observation | null> {
   const res = await fetch(`${API_BASE_URL}/weather/current/${stationId}`, {
     cache: "no-store",

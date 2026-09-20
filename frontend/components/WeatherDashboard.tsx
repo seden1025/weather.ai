@@ -1,7 +1,9 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 
+import AddressSearch from "@/components/AddressSearch";
 import AnomalyPanel from "@/components/AnomalyPanel";
 import RecentHistory from "@/components/RecentHistory";
 import WeatherCard from "@/components/WeatherCard";
@@ -19,6 +21,15 @@ import {
 const RECENT_HOURS = 5;
 const DEFAULT_STATION_ID = "108"; // 서울
 
+const WeatherMap = dynamic(() => import("@/components/WeatherMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[360px] items-center justify-center rounded-xl border border-gray-200 text-sm text-gray-400">
+      지도를 불러오는 중...
+    </div>
+  ),
+});
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 async function ingestStation(stationId: string) {
@@ -34,6 +45,8 @@ export default function WeatherDashboard() {
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [flyToCenter, setFlyToCenter] = useState<[number, number] | null>(null);
+  const [searchLabel, setSearchLabel] = useState<string | null>(null);
 
   useEffect(() => {
     getStations().then(setStations);
@@ -81,9 +94,15 @@ export default function WeatherDashboard() {
     setLocationError(null);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        const nearest = await getNearestStation(pos.coords.latitude, pos.coords.longitude);
-        if (nearest) setStationId(nearest.id);
-        else setLocationError("가까운 지점을 찾지 못했습니다.");
+        const { latitude, longitude } = pos.coords;
+        const nearest = await getNearestStation(latitude, longitude);
+        if (nearest) {
+          setStationId(nearest.id);
+          setFlyToCenter([latitude, longitude]);
+          setSearchLabel("내 위치");
+        } else {
+          setLocationError("가까운 지점을 찾지 못했습니다.");
+        }
         setLocating(false);
       },
       () => {
@@ -93,29 +112,58 @@ export default function WeatherDashboard() {
     );
   }
 
+  async function handleAddressFound(lat: number, lon: number, label: string) {
+    const nearest = await getNearestStation(lat, lon);
+    setFlyToCenter([lat, lon]);
+    setSearchLabel(label);
+    if (nearest) setStationId(nearest.id);
+  }
+
   return (
     <div className="space-y-8">
-      <section className="flex flex-wrap items-center gap-3">
-        <select
-          value={stationId}
-          onChange={(e) => setStationId(e.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        >
-          {stations.length === 0 && <option value={stationId}>{stationName}</option>}
-          {stations.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={handleLocate}
-          disabled={locating}
-          className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {locating ? "위치 확인 중..." : "내 위치로 찾기"}
-        </button>
-        {locationError && <span className="text-sm text-red-600">{locationError}</span>}
+      <section className="space-y-3">
+        <AddressSearch onFound={handleAddressFound} />
+
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={stationId}
+            onChange={(e) => {
+              setStationId(e.target.value);
+              setSearchLabel(null);
+            }}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          >
+            {stations.length === 0 && <option value={stationId}>{stationName}</option>}
+            {stations.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleLocate}
+            disabled={locating}
+            className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {locating ? "위치 확인 중..." : "내 위치로 찾기"}
+          </button>
+          {locationError && <span className="text-sm text-red-600">{locationError}</span>}
+        </div>
+
+        {searchLabel && (
+          <p className="text-sm text-gray-500">
+            검색 위치: {searchLabel} → 가장 가까운 관측지점 <strong>{stationName}</strong>
+          </p>
+        )}
+
+        <WeatherMap
+          stations={stations}
+          onSelectStation={(id) => {
+            setStationId(id);
+            setSearchLabel(null);
+          }}
+          flyToCenter={flyToCenter}
+        />
       </section>
 
       <section>

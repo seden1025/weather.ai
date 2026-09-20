@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.time import now_kst
 from app.db.session import get_db
 from app.models.observation import WeatherObservation
 from app.schemas.weather import ObservationOut
@@ -35,7 +36,8 @@ def get_history(
     station_id: str, hours: int | None = None, days: int = 7, db: Session = Depends(get_db)
 ):
     # observed_at은 기상청 응답 기준 KST 시각(naive)으로 저장되어 있다.
-    since = datetime.now() - timedelta(hours=hours) if hours is not None else datetime.now() - timedelta(days=days)
+    now = now_kst()
+    since = now - timedelta(hours=hours) if hours is not None else now - timedelta(days=days)
     stmt = (
         select(WeatherObservation)
         .where(

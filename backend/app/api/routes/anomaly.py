@@ -1,9 +1,8 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.time import now_kst
 from app.db.session import get_db
 from app.models.anomaly import AnomalyEvent
 from app.schemas.anomaly import AnomalyEventOut
@@ -34,7 +33,7 @@ async def investigate_event(event_id: int, db: Session = Depends(get_db)):
 
     event.news_sources = [{"title": i["title"], "link": i["link"]} for i in items]
     event.news_summary = "; ".join(i["title"] for i in items[:5]) or None
-    event.created_at = event.created_at or datetime.now(timezone.utc)
+    event.created_at = event.created_at or now_kst()
 
     db.commit()
     db.refresh(event)

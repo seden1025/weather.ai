@@ -24,6 +24,28 @@ export interface AnomalyEvent {
   created_at: string;
 }
 
+export interface Station {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+}
+
+export async function getStations(): Promise<Station[]> {
+  const res = await fetch(`${API_BASE_URL}/stations`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getNearestStation(lat: number, lon: number): Promise<Station | null> {
+  const url = new URL(`${API_BASE_URL}/stations/nearest`);
+  url.searchParams.set("lat", String(lat));
+  url.searchParams.set("lon", String(lon));
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function getCurrentWeather(stationId: string): Promise<Observation | null> {
   const res = await fetch(`${API_BASE_URL}/weather/current/${stationId}`, {
     cache: "no-store",

@@ -1,36 +1,22 @@
-import AnomalyPanel from "@/components/AnomalyPanel";
-import RecentHistory from "@/components/RecentHistory";
-import WeatherCard from "@/components/WeatherCard";
-import { getAnomalyEvents, getCurrentWeather, getRecentHistory } from "@/lib/api";
+import WeatherDashboard from "@/components/WeatherDashboard";
 
-const DEFAULT_STATION_ID = "108"; // 서울
-const RECENT_HOURS = 5;
-
-export default async function Home() {
-  const [observation, recent, anomalies] = await Promise.all([
-    getCurrentWeather(DEFAULT_STATION_ID),
-    getRecentHistory(DEFAULT_STATION_ID, RECENT_HOURS),
-    getAnomalyEvents(DEFAULT_STATION_ID),
-  ]);
-
+export default function Home() {
   return (
-    <main className="mx-auto max-w-3xl space-y-8 p-8">
-      <h1 className="text-2xl font-bold">Weather AI</h1>
+    <main className="mx-auto max-w-3xl space-y-10 p-8">
+      <header className="space-y-3 border-b border-gray-200 pb-6">
+        <h1 className="text-3xl font-bold">Weather AI</h1>
+        <p className="text-gray-600">
+          기상청 수치예보 모델과는 별개로, 과거 관측 데이터를 지도학습한 AI로 날씨를
+          예측하고 사람의 경험적 직관과 비교해보는 연구 프로젝트입니다.
+        </p>
+        <p className="text-gray-600">
+          평년과 크게 다른 이상치가 관측되면 과거 유사 사례와 관련 뉴스를 함께
+          찾아 보여줍니다. 아래에서 지역을 선택하거나 내 위치로 가장 가까운
+          관측지점을 찾아보세요.
+        </p>
+      </header>
 
-      <section>
-        <h2 className="mb-3 text-lg font-semibold">현재 날씨</h2>
-        <WeatherCard observation={observation} />
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-lg font-semibold">최근 {RECENT_HOURS}시간 날씨</h2>
-        <RecentHistory observations={recent} />
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-lg font-semibold">감지된 이상치</h2>
-        <AnomalyPanel events={anomalies} />
-      </section>
+      <WeatherDashboard />
     </main>
   );
 }

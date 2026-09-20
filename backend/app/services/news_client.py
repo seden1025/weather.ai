@@ -16,6 +16,8 @@ from xml.etree import ElementTree
 
 import httpx
 
+from app.core.time import KST
+
 DEFAULT_FEEDS = [
     "https://rss.donga.com/national.xml",
     "https://www.khan.co.kr/rss/rssdata/total_news.xml",
@@ -30,7 +32,8 @@ class RssNewsClient:
         self, keywords: list[str], around: datetime, window_days: int = 2
     ) -> list[dict]:
         if around.tzinfo is None:
-            around = around.replace(tzinfo=timezone.utc)
+            # observed_at은 KST wall-clock 기준 naive datetime
+            around = around.replace(tzinfo=KST)
         start = around - timedelta(days=window_days)
         end = around + timedelta(days=window_days)
 

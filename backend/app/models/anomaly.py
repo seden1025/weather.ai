@@ -14,7 +14,8 @@ class AnomalyEvent(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     station_id: Mapped[str] = mapped_column(String(16), index=True)
     variable: Mapped[str] = mapped_column(String(32))  # 예: temperature, precipitation
-    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    # 항상 한국시간(KST) wall-clock 기준 naive datetime으로 저장
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), index=True)
     value: Mapped[float] = mapped_column(Float)
     expected_low: Mapped[float | None] = mapped_column(Float, nullable=True)
     expected_high: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -25,4 +26,4 @@ class AnomalyEvent(Base):
     news_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     news_sources: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False))

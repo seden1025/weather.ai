@@ -13,7 +13,8 @@ class WeatherObservation(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     station_id: Mapped[str] = mapped_column(String(16), index=True)
-    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    # 항상 한국시간(KST) wall-clock 기준 naive datetime으로 저장 (기상청 API가 KST 기준)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), index=True)
 
     temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
     precipitation: Mapped[float | None] = mapped_column(Float, nullable=True)

@@ -1,17 +1,18 @@
 """기상자료개방포털에서 받아온 관측자료를 DB에 저장한다."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.time import now_kst
 from app.models.observation import WeatherObservation
 from app.services.kma_client import KmaClient
 
 
 async def ingest_recent(db: Session, station_id: str, hours: int = 24) -> int:
     """최근 `hours`시간 관측자료를 받아와 DB에 없는 것만 새로 저장한다."""
-    end = datetime.now()
+    end = now_kst()
     start = end - timedelta(hours=hours)
 
     client = KmaClient()

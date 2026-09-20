@@ -10,6 +10,7 @@
 결측치는 -9 / -9.0 / -9.00 같은 sentinel 값으로 내려온다.
 """
 
+import asyncio
 from datetime import datetime
 
 import httpx
@@ -43,10 +44,18 @@ class KmaClient:
             "stn": station_id,
             "authKey": self.api_key,
         }
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.get(ASOS_HOURLY_URL, params=params)
-            resp.raise_for_status()
-            return self._parse_asos_hourly(resp.text)
+        last_error: Exception | None = None
+        for attempt in range(4):
+            try:
+                async with httpx.AsyncClient(timeout=60) as client:
+                    resp = await client.get(ASOS_HOURLY_URL, params=params)
+                    resp.raise_for_status()
+                    return self._parse_asos_hourly(resp.text)
+            except (httpx.HTTPStatusError, httpx.TransportError) as exc:
+                last_error = exc
+                if attempt < 3:
+                    await asyncio.sleep(2**attempt)  # 1, 2, 4초
+        raise last_error
 
     @staticmethod
     def _parse_asos_hourly(raw_text: str) -> pd.DataFrame:

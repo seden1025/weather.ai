@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+import pandas as pd
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -9,6 +10,7 @@ from app.db.session import get_db
 from app.models.observation import WeatherObservation
 from app.schemas.weather import ObservationOut
 from app.services.ingestion import ingest_recent
+from app.services.prediction import available_horizons, predict_temperature
 
 router = APIRouter(prefix="/weather", tags=["weather"])
 
@@ -47,3 +49,40 @@ def get_history(
         .order_by(WeatherObservation.observed_at.asc())
     )
     return db.execute(stmt).scalars().all()
+
+
+@router.get("/forecast/{station_id}")
+def get_forecast(station_id: str, db: Session = Depends(get_db)):
+    """학습된 모델로 기온을 예측한다 (사용 가능한 모든 horizon에 대해)."""
+    horizons = available_horizons(station_id)
+    if not horizons:
+        return []
+
+    since = now_kst() - timedelta(hours=48)
+    stmt = (
+        select(WeatherObservation)
+        .where(
+            WeatherObservation.station_id == station_id,
+            WeatherObservation.observed_at >= since,
+        )
+        .order_by(WeatherObservation.observed_at.asc())
+    )
+    rows = db.execute(stmt).scalars().all()
+    if not rows:
+        return []
+
+    df = pd.DataFrame(
+        [
+            {
+                "observed_at": r.observed_at,
+                "temperature": r.temperature,
+                "humidity": r.humidity,
+                "wind_speed": r.wind_speed,
+                "pressure": r.pressure,
+            }
+            for r in rows
+        ]
+    )
+
+    predictions = [predict_temperature(df, station_id, h) for h in horizons]
+    return [p for p in predictions if p is not None]

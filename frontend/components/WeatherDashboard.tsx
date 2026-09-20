@@ -5,14 +5,17 @@ import { useEffect, useMemo, useState } from "react";
 
 import AddressSearch from "@/components/AddressSearch";
 import AnomalyPanel from "@/components/AnomalyPanel";
+import ForecastPanel from "@/components/ForecastPanel";
 import RecentHistory from "@/components/RecentHistory";
 import WeatherCard from "@/components/WeatherCard";
 import {
   type AnomalyEvent,
+  type Forecast,
   type Observation,
   type Station,
   getAnomalyEvents,
   getCurrentWeather,
+  getForecast,
   getNearestStation,
   getRecentHistory,
   getStations,
@@ -41,6 +44,7 @@ export default function WeatherDashboard() {
   const [stationId, setStationId] = useState(DEFAULT_STATION_ID);
   const [observation, setObservation] = useState<Observation | null>(null);
   const [recent, setRecent] = useState<Observation[]>([]);
+  const [forecasts, setForecasts] = useState<Forecast[]>([]);
   const [anomalies, setAnomalies] = useState<AnomalyEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -62,14 +66,16 @@ export default function WeatherDashboard() {
         await ingestStation(stationId);
         current = await getCurrentWeather(stationId);
       }
-      const [recentHistory, anomalyEvents] = await Promise.all([
+      const [recentHistory, anomalyEvents, forecast] = await Promise.all([
         getRecentHistory(stationId, RECENT_HOURS),
         getAnomalyEvents(stationId),
+        getForecast(stationId),
       ]);
       if (!cancelled) {
         setObservation(current);
         setRecent(recentHistory);
         setAnomalies(anomalyEvents);
+        setForecasts(forecast);
         setLoading(false);
       }
     }
@@ -171,6 +177,11 @@ export default function WeatherDashboard() {
           {stationName} 현재 날씨 {loading && <span className="text-sm text-gray-400">(불러오는 중...)</span>}
         </h2>
         <WeatherCard observation={observation} />
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-lg font-semibold">AI 예측 (지도학습 모델)</h2>
+        <ForecastPanel forecasts={forecasts} observation={observation} />
       </section>
 
       <section>

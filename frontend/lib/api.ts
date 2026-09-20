@@ -76,6 +76,19 @@ export async function getRecentHistory(stationId: string, hours: number): Promis
   return res.json();
 }
 
+export interface Forecast {
+  horizon_hours: number;
+  predicted_temperature: number;
+  model_test_mae: number;
+  based_on: string;
+}
+
+export async function getForecast(stationId: string): Promise<Forecast[]> {
+  const res = await fetch(`${API_BASE_URL}/weather/forecast/${stationId}`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function getAnomalyEvents(stationId?: string): Promise<AnomalyEvent[]> {
   const url = new URL(`${API_BASE_URL}/anomaly/events`);
   if (stationId) url.searchParams.set("station_id", stationId);

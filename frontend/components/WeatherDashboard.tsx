@@ -4,25 +4,20 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 
 import AddressSearch from "@/components/AddressSearch";
-import AnomalyPanel from "@/components/AnomalyPanel";
-import ForecastPanel from "@/components/ForecastPanel";
 import RecentHistory from "@/components/RecentHistory";
+import StationSelect from "@/components/StationSelect";
 import WeatherCard from "@/components/WeatherCard";
+import { useSelectedStation } from "@/lib/useStation";
 import {
-  type AnomalyEvent,
-  type Forecast,
   type Observation,
   type Station,
-  getAnomalyEvents,
   getCurrentWeather,
-  getForecast,
   getNearestStation,
   getRecentHistory,
   getStations,
 } from "@/lib/api";
 
 const RECENT_HOURS = 5;
-const DEFAULT_STATION_ID = "108"; // 서울
 
 const WeatherMap = dynamic(() => import("@/components/WeatherMap"), {
   ssr: false,
@@ -40,12 +35,10 @@ async function ingestStation(stationId: string) {
 }
 
 export default function WeatherDashboard() {
+  const [stationId, setStationId] = useSelectedStation();
   const [stations, setStations] = useState<Station[]>([]);
-  const [stationId, setStationId] = useState(DEFAULT_STATION_ID);
   const [observation, setObservation] = useState<Observation | null>(null);
   const [recent, setRecent] = useState<Observation[]>([]);
-  const [forecasts, setForecasts] = useState<Forecast[]>([]);
-  const [anomalies, setAnomalies] = useState<AnomalyEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -66,16 +59,10 @@ export default function WeatherDashboard() {
         await ingestStation(stationId);
         current = await getCurrentWeather(stationId);
       }
-      const [recentHistory, anomalyEvents, forecast] = await Promise.all([
-        getRecentHistory(stationId, RECENT_HOURS),
-        getAnomalyEvents(stationId),
-        getForecast(stationId),
-      ]);
+      const recentHistory = await getRecentHistory(stationId, RECENT_HOURS);
       if (!cancelled) {
         setObservation(current);
         setRecent(recentHistory);
-        setAnomalies(anomalyEvents);
-        setForecasts(forecast);
         setLoading(false);
       }
     }
@@ -141,21 +128,13 @@ export default function WeatherDashboard() {
         <AddressSearch onFound={handleAddressFound} />
 
         <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={stationId}
-            onChange={(e) => {
-              setStationId(e.target.value);
+          <StationSelect
+            stationId={stationId}
+            onChange={(id) => {
+              setStationId(id);
               setSearchLabel(null);
             }}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          >
-            {stations.length === 0 && <option value={stationId}>{stationName}</option>}
-            {stations.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+          />
           <button
             onClick={handleLocate}
             disabled={locating}
@@ -184,24 +163,15 @@ export default function WeatherDashboard() {
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">
-          {stationName} 현재 날씨 {loading && <span className="text-sm text-gray-400">(불러오는 중...)</span>}
+          {stationName} 현재 날씨{" "}
+          {loading && <span className="text-sm text-gray-400">(불러오는 중...)</span>}
         </h2>
         <WeatherCard observation={observation} />
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">AI 예측 (지도학습 모델)</h2>
-        <ForecastPanel forecasts={forecasts} observation={observation} />
-      </section>
-
-      <section>
         <h2 className="mb-3 text-lg font-semibold">최근 {RECENT_HOURS}시간 날씨</h2>
         <RecentHistory observations={recent} />
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-lg font-semibold">감지된 이상치</h2>
-        <AnomalyPanel events={anomalies} />
       </section>
     </div>
   );

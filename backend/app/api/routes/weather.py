@@ -1,7 +1,8 @@
-from datetime import timedelta
+from datetime import date as date_type
+from datetime import datetime, timedelta
 
 import pandas as pd
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -9,7 +10,7 @@ from app.core.time import now_kst
 from app.db.session import get_db
 from app.models.observation import WeatherObservation
 from app.schemas.weather import ObservationOut
-from app.services.ingestion import ingest_recent
+from app.services.ingestion import ingest_range, ingest_recent
 from app.services.prediction import available_horizons, predict_temperature
 
 router = APIRouter(prefix="/weather", tags=["weather"])
@@ -49,6 +50,43 @@ def get_history(
         .order_by(WeatherObservation.observed_at.asc())
     )
     return db.execute(stmt).scalars().all()
+
+
+@router.get("/on-date/{station_id}", response_model=list[ObservationOut])
+async def get_on_date(station_id: str, date: str, db: Session = Depends(get_db)):
+    """특정 날짜(YYYY-MM-DD, KST 기준)의 시간별 관측자료를 반환한다.
+
+    DB에 해당 날짜 데이터가 없으면 기상청 API에서 즉시 받아와 저장한 뒤
+    반환한다 (미래 데이터를 5년치 전부 미리 넣어두지 않고, 요청받은 날짜만
+    그때그때 채우는 방식이라 운영 DB 용량을 아낄 수 있다).
+    """
+    try:
+        day = date_type.fromisoformat(date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="date는 YYYY-MM-DD 형식이어야 합니다")
+
+    if day > now_kst().date():
+        raise HTTPException(status_code=400, detail="미래 날짜는 조회할 수 없습니다")
+
+    start = datetime.combine(day, datetime.min.time())
+    end = start + timedelta(days=1)
+
+    stmt = (
+        select(WeatherObservation)
+        .where(
+            WeatherObservation.station_id == station_id,
+            WeatherObservation.observed_at >= start,
+            WeatherObservation.observed_at < end,
+        )
+        .order_by(WeatherObservation.observed_at.asc())
+    )
+    rows = db.execute(stmt).scalars().all()
+
+    if not rows:
+        await ingest_range(db, [station_id], start, end)
+        rows = db.execute(stmt).scalars().all()
+
+    return rows
 
 
 @router.get("/forecast/{station_id}")

@@ -77,6 +77,14 @@ export async function getRecentHistory(stationId: string, hours: number): Promis
   return res.json();
 }
 
+export async function getOnDate(stationId: string, date: string): Promise<Observation[]> {
+  const url = new URL(`${API_BASE_URL}/weather/on-date/${stationId}`);
+  url.searchParams.set("date", date);
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export interface Forecast {
   horizon_hours: number;
   predicted_temperature: number;

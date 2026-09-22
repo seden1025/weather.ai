@@ -4,7 +4,7 @@ export default function Home() {
   return (
     <main className="mx-auto max-w-3xl space-y-10 p-8">
       <header className="space-y-3 border-b border-gray-200 pb-6">
-        <h1 className="text-3xl font-bold">Weather AI</h1>
+        <h1 className="text-2xl font-bold">현재 날씨 · 지도</h1>
         <p className="text-gray-600">
           기상청 수치예보 모델과는 별개로, 과거 관측 데이터를 지도학습한 AI로 날씨를
           예측하고 사람의 경험적 직관과 비교해보는 연구 프로젝트입니다.

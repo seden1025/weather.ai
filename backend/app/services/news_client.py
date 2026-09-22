@@ -21,6 +21,10 @@ from app.core.time import KST
 DEFAULT_FEEDS = [
     "https://rss.donga.com/national.xml",
     "https://www.khan.co.kr/rss/rssdata/total_news.xml",
+    "https://www.chosun.com/arc/outboundfeeds/rss/category/national/?outputType=xml",
+    "https://www.seoul.co.kr/xml/rss/rss_society.xml",
+    "https://www.mk.co.kr/rss/30200030/",
+    "https://www.hani.co.kr/rss",
 ]
 
 

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.time import now_kst
 from app.models.observation import WeatherObservation
+from app.services.anomaly_pipeline import detect_and_investigate
 from app.services.kma_client import KmaClient
 
 MAX_CHUNK_DAYS = 31  # kma_sfctm3.php 기간 조회 최대 범위
@@ -36,27 +37,28 @@ def _clean(value):
     return value
 
 
-def _insert_dataframe(db: Session, df: pd.DataFrame, existing: set) -> int:
-    inserted = 0
+def _insert_dataframe(db: Session, df: pd.DataFrame, existing: set) -> list[WeatherObservation]:
+    inserted: list[WeatherObservation] = []
     for _, row in df.iterrows():
         observed_at = row["observed_at"].to_pydatetime()
         key = (row["station_id"], observed_at)
         if key in existing:
             continue
-        db.add(
-            WeatherObservation(
-                station_id=row["station_id"],
-                observed_at=observed_at,
-                temperature=_clean(row["temperature"]),
-                precipitation=_clean(row["precipitation"]),
-                wind_speed=_clean(row["wind_speed"]),
-                humidity=_clean(row["humidity"]),
-                pressure=_clean(row["pressure"]),
-            )
+        obs = WeatherObservation(
+            station_id=row["station_id"],
+            observed_at=observed_at,
+            temperature=_clean(row["temperature"]),
+            precipitation=_clean(row["precipitation"]),
+            wind_speed=_clean(row["wind_speed"]),
+            humidity=_clean(row["humidity"]),
+            pressure=_clean(row["pressure"]),
         )
+        db.add(obs)
         existing.add(key)
-        inserted += 1
+        inserted.append(obs)
     db.commit()
+    for obs in inserted:
+        db.refresh(obs)
     return inserted
 
 
@@ -73,7 +75,10 @@ async def ingest_recent(db: Session, station_id: str, hours: int = 24) -> int:
     client = KmaClient()
     df = await client.get_asos_hourly(station_id, start, end)
     existing = _existing_keys(db, station_ids, start, end)
-    return _insert_dataframe(db, df, existing)
+    inserted_rows = _insert_dataframe(db, df, existing)
+
+    await detect_and_investigate(db, inserted_rows)
+    return len(inserted_rows)
 
 
 async def ingest_range(
@@ -100,7 +105,7 @@ async def ingest_range(
     while chunk_start < end:
         chunk_end = min(chunk_start + timedelta(days=MAX_CHUNK_DAYS), end)
         df = await client.get_asos_hourly(stn_param, chunk_start, chunk_end)
-        total_inserted += _insert_dataframe(db, df, existing)
+        total_inserted += len(_insert_dataframe(db, df, existing))
         if on_progress:
             on_progress(chunk_start, chunk_end, total_inserted)
         chunk_start = chunk_end

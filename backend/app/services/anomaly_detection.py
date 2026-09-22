@@ -1,48 +1,49 @@
-"""통계 기반 이상치 탐지 + 과거 유사 사례 검색.
+"""통계 기반 이상치 탐지.
 
-방식:
-1. 같은 station/변수/월(계절성)별로 평균·표준편차를 구해 z-score 계산
-2. |z| > threshold 인 값을 이상치로 표시
-3. 이상치로 판정된 값과 절대값 차이가 tolerance 이내인 과거 관측을 유사 사례로 검색
+지점 x 변수 x 월별 평년 평균/표준편차(climatology.json, scripts/compute_climatology.py로
+로컬 5년 데이터에서 미리 계산해둔 값)를 기준으로, 새로 들어온 관측값의 z-score가
+임계값을 넘으면 이상치로 판정한다. 운영 DB에 몇 년치 원본 데이터를 다시
+넣지 않고도 "평년과 얼마나 다른지"를 즉시 계산할 수 있다.
 """
 
-import pandas as pd
+import json
+from pathlib import Path
 
+CLIMATOLOGY_PATH = Path(__file__).resolve().parent / "climatology.json"
 Z_SCORE_THRESHOLD = 3.0
 
+_climatology_cache: dict | None = None
 
-def detect_anomalies(
-    df: pd.DataFrame, variable: str, z_threshold: float = Z_SCORE_THRESHOLD
-) -> pd.DataFrame:
-    """df는 observed_at, station_id, {variable} 컬럼을 포함해야 한다.
-    월별 평균/표준편차 기준 z-score로 이상치 여부(is_anomaly)와
-    기대 범위(expected_low/high)를 계산해 반환한다.
+
+def _load_climatology() -> dict:
+    global _climatology_cache
+    if _climatology_cache is None:
+        if CLIMATOLOGY_PATH.exists():
+            _climatology_cache = json.loads(CLIMATOLOGY_PATH.read_text(encoding="utf-8"))
+        else:
+            _climatology_cache = {}
+    return _climatology_cache
+
+
+def check_anomaly(
+    station_id: str, variable: str, month: int, value: float, z_threshold: float = Z_SCORE_THRESHOLD
+) -> dict | None:
+    """value가 해당 지점/변수/월의 평년 대비 이상치인지 확인한다.
+
+    이상치가 아니거나 평년값 데이터가 없으면 None, 이상치면
+    {z_score, expected_low, expected_high}를 반환한다.
     """
-    data = df.dropna(subset=[variable]).copy()
-    data["month"] = pd.to_datetime(data["observed_at"]).dt.month
+    stats = _load_climatology().get(f"{station_id}:{variable}:{month}")
+    if not stats or not stats.get("std"):
+        return None
 
-    stats = data.groupby(["station_id", "month"])[variable].agg(["mean", "std"]).reset_index()
-    data = data.merge(stats, on=["station_id", "month"], how="left")
+    mean, std = stats["mean"], stats["std"]
+    z = (value - mean) / std
+    if abs(z) <= z_threshold:
+        return None
 
-    data["z_score"] = (data[variable] - data["mean"]) / data["std"].replace(0, pd.NA)
-    data["is_anomaly"] = data["z_score"].abs() > z_threshold
-    data["expected_low"] = data["mean"] - z_threshold * data["std"]
-    data["expected_high"] = data["mean"] + z_threshold * data["std"]
-
-    return data
-
-
-def find_similar_past_events(
-    history_df: pd.DataFrame,
-    variable: str,
-    value: float,
-    tolerance: float,
-    exclude_index: int | None = None,
-) -> pd.DataFrame:
-    """history_df 중 value와의 절대 차이가 tolerance 이내인 행을 유사 사례로 반환."""
-    candidates = history_df.dropna(subset=[variable]).copy()
-    if exclude_index is not None:
-        candidates = candidates.drop(index=exclude_index, errors="ignore")
-    candidates["diff"] = (candidates[variable] - value).abs()
-    similar = candidates[candidates["diff"] <= tolerance].sort_values("diff")
-    return similar
+    return {
+        "z_score": round(z, 2),
+        "expected_low": round(mean - z_threshold * std, 2),
+        "expected_high": round(mean + z_threshold * std, 2),
+    }

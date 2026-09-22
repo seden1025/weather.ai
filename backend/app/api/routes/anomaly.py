@@ -1,16 +1,13 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.time import now_kst
 from app.db.session import get_db
 from app.models.anomaly import AnomalyEvent
 from app.schemas.anomaly import AnomalyEventOut
-from app.services.news_client import RssNewsClient
+from app.services.anomaly_investigation import investigate
 
 router = APIRouter(prefix="/anomaly", tags=["anomaly"])
-
-INVESTIGATION_KEYWORDS = ["폭염", "한파", "폭우", "가뭄", "이상기후", "기상이변", "태풍", "폭설"]
 
 
 @router.get("/events", response_model=list[AnomalyEventOut])
@@ -23,18 +20,11 @@ def list_events(station_id: str | None = None, limit: int = 50, db: Session = De
 
 @router.post("/events/{event_id}/investigate", response_model=AnomalyEventOut)
 async def investigate_event(event_id: int, db: Session = Depends(get_db)):
-    """이상치 이벤트에 대해 네이버 뉴스 검색으로 원인 후보 기사를 채워넣는다."""
+    """이상치 이벤트를 다시 조사해 뉴스 정보를 새로고침한다.
+
+    이상치 탐지 시 자동으로 한 번 조사되지만, 이 엔드포인트로 수동 재조사도 가능하다.
+    """
     event = db.get(AnomalyEvent, event_id)
     if event is None:
-        raise ValueError(f"AnomalyEvent {event_id} not found")
-
-    news_client = RssNewsClient()
-    items = await news_client.search(INVESTIGATION_KEYWORDS, around=event.observed_at)
-
-    event.news_sources = [{"title": i["title"], "link": i["link"]} for i in items]
-    event.news_summary = "; ".join(i["title"] for i in items[:5]) or None
-    event.created_at = event.created_at or now_kst()
-
-    db.commit()
-    db.refresh(event)
-    return event
+        raise HTTPException(status_code=404, detail=f"AnomalyEvent {event_id} not found")
+    return await investigate(db, event)

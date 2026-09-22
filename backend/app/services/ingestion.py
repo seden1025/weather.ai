@@ -49,13 +49,18 @@ def _insert_dataframe(db: Session, df: pd.DataFrame, existing: set) -> int:
 
 
 async def ingest_recent(db: Session, station_id: str, hours: int = 24) -> int:
-    """최근 `hours`시간 관측자료를 받아와 DB에 없는 것만 새로 저장한다 (단일 지점)."""
+    """최근 `hours`시간 관측자료를 받아와 DB에 없는 것만 새로 저장한다.
+
+    station_id는 단일 지점("108") 또는 ':'로 구분한 다중 지점("108:159:184")
+    모두 지원한다.
+    """
     end = now_kst()
     start = end - timedelta(hours=hours)
+    station_ids = station_id.split(":")
 
     client = KmaClient()
     df = await client.get_asos_hourly(station_id, start, end)
-    existing = _existing_keys(db, [station_id], start, end)
+    existing = _existing_keys(db, station_ids, start, end)
     return _insert_dataframe(db, df, existing)
 
 

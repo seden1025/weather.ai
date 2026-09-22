@@ -1,5 +1,6 @@
 """기상자료개방포털에서 받아온 관측자료를 DB에 저장한다."""
 
+import math
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -24,6 +25,17 @@ def _existing_keys(db: Session, station_ids: list[str], start: datetime, end: da
     return {(r[0], r[1]) for r in rows}
 
 
+def _clean(value):
+    """pandas가 컬럼 내 None을 NaN으로 바꿔버리는 경우가 있어(다른 행에 실수
+    값이 섞이면 float64로 승격되면서 발생), DB에 NaN이 그대로 들어가지 않도록
+    None으로 되돌린다. NaN은 유효한 JSON이 아니라 API 응답 시 오류가 난다."""
+    if value is None:
+        return None
+    if isinstance(value, float) and math.isnan(value):
+        return None
+    return value
+
+
 def _insert_dataframe(db: Session, df: pd.DataFrame, existing: set) -> int:
     inserted = 0
     for _, row in df.iterrows():
@@ -35,11 +47,11 @@ def _insert_dataframe(db: Session, df: pd.DataFrame, existing: set) -> int:
             WeatherObservation(
                 station_id=row["station_id"],
                 observed_at=observed_at,
-                temperature=row["temperature"],
-                precipitation=row["precipitation"],
-                wind_speed=row["wind_speed"],
-                humidity=row["humidity"],
-                pressure=row["pressure"],
+                temperature=_clean(row["temperature"]),
+                precipitation=_clean(row["precipitation"]),
+                wind_speed=_clean(row["wind_speed"]),
+                humidity=_clean(row["humidity"]),
+                pressure=_clean(row["pressure"]),
             )
         )
         existing.add(key)

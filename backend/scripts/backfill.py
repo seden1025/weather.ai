@@ -2,6 +2,7 @@
 
 사용법 (backend/ 디렉터리에서, venv 활성화 후):
     python -m scripts.backfill --station 108 --years 5
+    python -m scripts.backfill --all --years 5   # 전국 65개 지점 동시 백필
 
 DATABASE_URL 환경변수(.env)가 가리키는 DB에 그대로 적재된다. 로컬 SQLite로
 테스트한 뒤, 운영 DB(Neon)에 반영하려면 backend/.env의 DATABASE_URL을
@@ -20,9 +21,10 @@ from app.core.time import now_kst  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import SessionLocal, engine  # noqa: E402
 from app.services.ingestion import ingest_range  # noqa: E402
+from app.services.stations import STATIONS  # noqa: E402
 
 
-async def main(station_id: str, years: float) -> None:
+async def main(station_ids: list[str], years: float) -> None:
     Base.metadata.create_all(bind=engine)
 
     end = now_kst()
@@ -33,8 +35,8 @@ async def main(station_id: str, years: float) -> None:
 
     db = SessionLocal()
     try:
-        print(f"지점 {station_id}: {start.date()} ~ {end.date()} 백필 시작")
-        total = await ingest_range(db, station_id, start, end, on_progress=report)
+        print(f"지점 {len(station_ids)}개: {start.date()} ~ {end.date()} 백필 시작")
+        total = await ingest_range(db, station_ids, start, end, on_progress=report)
         print(f"완료: 새로 저장된 행 {total}건")
     finally:
         db.close()
@@ -42,7 +44,16 @@ async def main(station_id: str, years: float) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--station", default="108", help="지점번호 (기본: 108 서울)")
+    parser.add_argument("--station", default=None, help="지점번호 (예: 108)")
+    parser.add_argument("--all", action="store_true", help="stations.py의 전체 지점 백필")
     parser.add_argument("--years", type=float, default=5, help="과거 몇 년치 (기본: 5)")
     args = parser.parse_args()
-    asyncio.run(main(args.station, args.years))
+
+    if args.all:
+        ids = [s["id"] for s in STATIONS]
+    elif args.station:
+        ids = [args.station]
+    else:
+        ids = ["108"]
+
+    asyncio.run(main(ids, args.years))

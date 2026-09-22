@@ -1,34 +1,47 @@
-"""OpenStreetMap Nominatim을 이용한 주소 → 좌표 변환 (무료, 키 불필요).
+"""카카오 로컬 API를 이용한 주소 → 좌표 변환.
 
-Nominatim 사용 정책상 User-Agent를 명시해야 하고, 초당 1회 이하로 호출해야
-한다 (https://operations.osmfoundation.org/policies/nominatim/). 학생
-동아리 프로젝트 트래픽 규모에서는 별도 쓰로틀링 없이도 문제되지 않는다.
+https://developers.kakao.com/docs/latest/ko/local/dev-guide#address-coord
+REST API 키 발급 필요 (카카오 개발자센터 → 내 애플리케이션 → 앱 키).
 """
 
 import httpx
 
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "weather-ai-club-project/1.0 (student project; contact via GitHub issues)"
+from app.core.config import settings
+
+KAKAO_ADDRESS_SEARCH_URL = "https://dapi.kakao.com/v2/local/search/address.json"
+KAKAO_KEYWORD_SEARCH_URL = "https://dapi.kakao.com/v2/local/search/keyword.json"
 
 
 async def search_address(query: str, limit: int = 5) -> list[dict]:
-    params = {
-        "q": query,
-        "format": "json",
-        "countrycodes": "kr",
-        "limit": limit,
-    }
-    headers = {"User-Agent": USER_AGENT}
+    headers = {"Authorization": f"KakaoAK {settings.kakao_rest_api_key}"}
+    params = {"query": query, "size": limit}
+
     async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(NOMINATIM_URL, params=params, headers=headers)
+        resp = await client.get(KAKAO_ADDRESS_SEARCH_URL, headers=headers, params=params)
         resp.raise_for_status()
         data = resp.json()
+        documents = data.get("documents", [])
+
+        # 지번/도로명 주소로 못 찾으면(동네 이름, 건물명 등) 키워드 검색으로 재시도
+        if not documents:
+            resp = await client.get(KAKAO_KEYWORD_SEARCH_URL, headers=headers, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            documents = data.get("documents", [])
+            return [
+                {
+                    "display_name": item["address_name"] or item["place_name"],
+                    "lat": float(item["y"]),
+                    "lon": float(item["x"]),
+                }
+                for item in documents
+            ]
 
     return [
         {
-            "display_name": item["display_name"],
-            "lat": float(item["lat"]),
-            "lon": float(item["lon"]),
+            "display_name": item["address_name"],
+            "lat": float(item["y"]),
+            "lon": float(item["x"]),
         }
-        for item in data
+        for item in documents
     ]

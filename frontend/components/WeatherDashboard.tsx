@@ -100,29 +100,39 @@ export default function WeatherDashboard() {
     setLocationError(null);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        const { latitude, longitude } = pos.coords;
+        const { latitude, longitude, accuracy } = pos.coords;
         const nearest = await getNearestStation(latitude, longitude);
         if (nearest) {
           setStationId(nearest.id);
           setFlyToCenter([latitude, longitude]);
-          setSearchLabel("내 위치");
+          const accuracyNote = accuracy ? ` (오차범위 ±${Math.round(accuracy)}m)` : "";
+          setSearchLabel(`내 위치${accuracyNote}`);
         } else {
           setLocationError("가까운 지점을 찾지 못했습니다.");
         }
         setLocating(false);
       },
-      () => {
-        setLocationError("위치 권한이 거부되었거나 조회에 실패했습니다.");
+      (err) => {
+        setLocationError(
+          err.code === err.PERMISSION_DENIED
+            ? "위치 권한이 거부되었습니다. 브라우저 주소창 왼쪽 아이콘에서 위치 권한을 허용해주세요."
+            : "위치 조회에 실패했습니다."
+        );
         setLocating(false);
-      }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   }
 
   async function handleAddressFound(lat: number, lon: number, label: string) {
     const nearest = await getNearestStation(lat, lon);
     setFlyToCenter([lat, lon]);
-    setSearchLabel(label);
-    if (nearest) setStationId(nearest.id);
+    if (nearest) {
+      setSearchLabel(`${label} (가장 가까운 지점까지 약 ${nearest.distance_km}km)`);
+      setStationId(nearest.id);
+    } else {
+      setSearchLabel(label);
+    }
   }
 
   return (

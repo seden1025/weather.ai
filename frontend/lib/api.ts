@@ -29,6 +29,7 @@ export interface Station {
   name: string;
   lat: number;
   lon: number;
+  distance_km?: number;
 }
 
 export async function getStations(): Promise<Station[]> {

@@ -13,22 +13,23 @@ from app.services.kma_client import KmaClient
 MAX_CHUNK_DAYS = 31  # kma_sfctm3.php 기간 조회 최대 범위
 
 
-def _existing_timestamps(db: Session, station_id: str, start: datetime, end: datetime) -> set:
+def _existing_keys(db: Session, station_ids: list[str], start: datetime, end: datetime) -> set:
     rows = db.execute(
-        select(WeatherObservation.observed_at).where(
-            WeatherObservation.station_id == station_id,
+        select(WeatherObservation.station_id, WeatherObservation.observed_at).where(
+            WeatherObservation.station_id.in_(station_ids),
             WeatherObservation.observed_at >= start,
             WeatherObservation.observed_at <= end,
         )
     ).all()
-    return {r[0] for r in rows}
+    return {(r[0], r[1]) for r in rows}
 
 
 def _insert_dataframe(db: Session, df: pd.DataFrame, existing: set) -> int:
     inserted = 0
     for _, row in df.iterrows():
         observed_at = row["observed_at"].to_pydatetime()
-        if observed_at in existing:
+        key = (row["station_id"], observed_at)
+        if key in existing:
             continue
         db.add(
             WeatherObservation(
@@ -41,38 +42,47 @@ def _insert_dataframe(db: Session, df: pd.DataFrame, existing: set) -> int:
                 pressure=row["pressure"],
             )
         )
-        existing.add(observed_at)
+        existing.add(key)
         inserted += 1
     db.commit()
     return inserted
 
 
 async def ingest_recent(db: Session, station_id: str, hours: int = 24) -> int:
-    """최근 `hours`시간 관측자료를 받아와 DB에 없는 것만 새로 저장한다."""
+    """최근 `hours`시간 관측자료를 받아와 DB에 없는 것만 새로 저장한다 (단일 지점)."""
     end = now_kst()
     start = end - timedelta(hours=hours)
 
     client = KmaClient()
     df = await client.get_asos_hourly(station_id, start, end)
-    existing = _existing_timestamps(db, station_id, start, end)
+    existing = _existing_keys(db, [station_id], start, end)
     return _insert_dataframe(db, df, existing)
 
 
 async def ingest_range(
-    db: Session, station_id: str, start: datetime, end: datetime, on_progress=None
+    db: Session,
+    station_ids: list[str],
+    start: datetime,
+    end: datetime,
+    on_progress=None,
 ) -> int:
     """[start, end] 구간을 31일 단위로 나눠서 순차적으로 백필한다.
+
+    station_ids에 여러 지점을 한 번에 넘기면, 기상청 API의 ':' 구분 다중 지점
+    조회를 이용해 단일 지점 백필과 거의 같은 호출 수로 여러 지점을 동시에
+    받아온다.
 
     on_progress(chunk_start, chunk_end, inserted_so_far)가 주어지면 청크마다 호출한다.
     """
     client = KmaClient()
-    existing = _existing_timestamps(db, station_id, start, end)
+    stn_param = ":".join(station_ids)
+    existing = _existing_keys(db, station_ids, start, end)
 
     total_inserted = 0
     chunk_start = start
     while chunk_start < end:
         chunk_end = min(chunk_start + timedelta(days=MAX_CHUNK_DAYS), end)
-        df = await client.get_asos_hourly(station_id, chunk_start, chunk_end)
+        df = await client.get_asos_hourly(stn_param, chunk_start, chunk_end)
         total_inserted += _insert_dataframe(db, df, existing)
         if on_progress:
             on_progress(chunk_start, chunk_end, total_inserted)

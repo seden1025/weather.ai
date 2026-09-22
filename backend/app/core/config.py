@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./weather_ai.db"
     kma_api_key: str = ""
+    kakao_rest_api_key: str = ""
     frontend_origin: str = "http://localhost:3000"
 
 

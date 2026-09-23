@@ -20,11 +20,16 @@ class UserPrediction(Base):
     station_id: Mapped[str] = mapped_column(String(16), index=True)
     predict_date: Mapped[date] = mapped_column(Date, index=True)  # 예측 대상 날짜(KST)
 
+    # 관찰: 지금 창밖은 어떤가
     sky_condition: Mapped[str] = mapped_column(String(16))  # 맑음/구름조금/흐림/비/눈
     wind_feel: Mapped[str] = mapped_column(String(16))  # 없음/약함/보통/강함
     memo: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # 예측: 오늘 하루 전체는 어떨 것 같은가
     predicted_max_temp: Mapped[float] = mapped_column(Float)
+    predicted_sky_condition: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
     ai_predicted_max_temp: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ai_predicted_sky_condition: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False))

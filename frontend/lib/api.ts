@@ -106,8 +106,11 @@ export interface Prediction {
   wind_feel: string;
   memo: string | null;
   predicted_max_temp: number;
+  predicted_sky_condition: string | null;
   ai_predicted_max_temp: number | null;
+  ai_predicted_sky_condition: string | null;
   actual_max_temp: number | null;
+  actual_rained: boolean | null;
   created_at: string;
 }
 
@@ -117,6 +120,7 @@ export async function submitPrediction(
     sky_condition: string;
     wind_feel: string;
     predicted_max_temp: number;
+    predicted_sky_condition?: string;
     memo?: string;
   }
 ): Promise<Prediction | null> {

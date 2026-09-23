@@ -50,6 +50,7 @@ def load_observations(station_id: str) -> pd.DataFrame:
                 "humidity": r.humidity,
                 "wind_speed": r.wind_speed,
                 "pressure": r.pressure,
+                "precipitation": r.precipitation,
             }
             for r in rows
         ]

@@ -1,34 +1,42 @@
-"""기온 예측을 위한 특징(feature) 생성.
+"""기온 예측 / 강수 여부 예측을 위한 특징(feature) 생성.
 
-시간별 관측자료(temperature, humidity, wind_speed, pressure)로부터
-- 과거 시차(lag) 기온
+시간별 관측자료(temperature, humidity, wind_speed, pressure, precipitation)로부터
+- 과거 시차(lag) 기온·강수
 - 시각/계절의 주기성(sin/cos 인코딩)
-을 특징으로 만든다. 라벨은 `horizon_hours`시간 뒤의 기온이다.
+을 특징으로 만든다.
 """
 
 import numpy as np
 import pandas as pd
 
 LAG_HOURS = [1, 3, 6, 12, 24]
-BASE_COLS = ["temperature", "humidity", "wind_speed", "pressure"]
+INTERPOLATE_COLS = ["temperature", "humidity", "wind_speed", "pressure"]
 
 FEATURE_COLS = (
     [f"temp_lag_{lag}" for lag in LAG_HOURS]
+    + [f"precip_lag_{lag}" for lag in (1, 3, 6)]
     + ["humidity", "wind_speed", "pressure", "hour_sin", "hour_cos", "doy_sin", "doy_cos"]
 )
 
 
 def _add_features(df: pd.DataFrame) -> pd.DataFrame:
-    """observed_at, temperature, humidity, wind_speed, pressure 컬럼을 갖는 df를
-    받아 시간 grid로 재색인하고 lag/시각 특징을 추가한다."""
+    """observed_at, temperature, humidity, wind_speed, pressure, precipitation
+    컬럼을 갖는 df를 받아 시간 grid로 재색인하고 lag/시각 특징을 추가한다."""
     data = df.sort_values("observed_at").drop_duplicates("observed_at").set_index("observed_at")
 
     full_index = pd.date_range(data.index.min(), data.index.max(), freq="h")
     data = data.reindex(full_index)
-    data[BASE_COLS] = data[BASE_COLS].interpolate(limit=3)
+    data[INTERPOLATE_COLS] = data[INTERPOLATE_COLS].interpolate(limit=3)
+    # 강수는 결측을 보간하지 않고 "관측 안 됨=비 안 옴"으로 간주 (선형보간은 왜곡됨)
+    if "precipitation" in data.columns:
+        data["precipitation"] = data["precipitation"].fillna(0)
+    else:
+        data["precipitation"] = 0.0
 
     for lag in LAG_HOURS:
         data[f"temp_lag_{lag}"] = data["temperature"].shift(lag)
+    for lag in (1, 3, 6):
+        data[f"precip_lag_{lag}"] = data["precipitation"].shift(lag)
 
     hours = data.index.hour + data.index.minute / 60
     data["hour_sin"] = np.sin(2 * np.pi * hours / 24)
@@ -42,9 +50,22 @@ def _add_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_training_frame(df: pd.DataFrame, horizon_hours: int) -> tuple[pd.DataFrame, list[str]]:
-    """학습용 (특징, 라벨) 프레임을 만든다. 결측 있는 행은 제거."""
+    """기온 예측 학습용 (특징, 라벨) 프레임을 만든다. 결측 있는 행은 제거."""
     data = _add_features(df)
     data["target"] = data["temperature"].shift(-horizon_hours)
+    data = data.dropna(subset=FEATURE_COLS + ["target"])
+    return data, FEATURE_COLS
+
+
+def build_rain_training_frame(df: pd.DataFrame, horizon_hours: int) -> tuple[pd.DataFrame, list[str]]:
+    """강수 여부(0/1) 분류 학습용 (특징, 라벨) 프레임을 만든다.
+
+    라벨은 horizon_hours 시점에 강수량이 0.1mm를 넘는지 여부다.
+    """
+    data = _add_features(df)
+    future_precip = data["precipitation"].shift(-horizon_hours)
+    data["target"] = (future_precip > 0.1).astype(float)
+    data.loc[future_precip.isna(), "target"] = float("nan")
     data = data.dropna(subset=FEATURE_COLS + ["target"])
     return data, FEATURE_COLS
 

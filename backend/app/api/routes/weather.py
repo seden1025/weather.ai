@@ -117,6 +117,7 @@ def get_forecast(station_id: str, db: Session = Depends(get_db)):
                 "humidity": r.humidity,
                 "wind_speed": r.wind_speed,
                 "pressure": r.pressure,
+                "precipitation": r.precipitation,
             }
             for r in rows
         ]

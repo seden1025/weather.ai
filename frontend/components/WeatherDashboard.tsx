@@ -55,7 +55,9 @@ export default function WeatherDashboard() {
     async function load() {
       setLoading(true);
       let current = await getCurrentWeather(stationId);
-      if (!current) {
+      const staleMs = current ? Date.now() - new Date(current.observed_at).getTime() : Infinity;
+      const isStale = staleMs > 90 * 60 * 1000; // 90분 넘게 갱신 안 됐으면 새로 받아옴
+      if (!current || isStale) {
         await ingestStation(stationId);
         current = await getCurrentWeather(stationId);
       }

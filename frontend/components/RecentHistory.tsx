@@ -1,4 +1,5 @@
 import type { Observation } from "@/lib/api";
+import { weatherIcon } from "@/lib/weatherIcon";
 
 export default function RecentHistory({ observations }: { observations: Observation[] }) {
   if (observations.length === 0) {
@@ -9,23 +10,35 @@ export default function RecentHistory({ observations }: { observations: Observat
 
   return (
     <ul className="divide-y divide-gray-200 rounded-xl border border-gray-200">
-      {items.map((obs) => (
-        <li key={obs.observed_at} className="flex items-center justify-between px-4 py-2 text-sm">
-          <span className="text-gray-500">
-            {new Date(obs.observed_at).toLocaleString("ko-KR", {
-              month: "numeric",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
-          <span className="font-medium">
-            {obs.temperature != null ? `${obs.temperature}°C` : "-"}
-          </span>
-          <span className="text-gray-500">습도 {obs.humidity ?? "-"}%</span>
-          <span className="text-gray-500">풍속 {obs.wind_speed ?? "-"}m/s</span>
-        </li>
-      ))}
+      {items.map((obs) => {
+        const icon = weatherIcon(obs);
+        return (
+          <li
+            key={obs.observed_at}
+            className="flex items-center justify-between px-4 py-2 text-sm"
+          >
+            <span className="text-gray-500">
+              {new Date(obs.observed_at).toLocaleString("ko-KR", {
+                month: "numeric",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+            <span className="flex items-center gap-1" title={icon.label}>
+              <span className="text-lg" aria-hidden="true">
+                {icon.emoji}
+              </span>
+              <span className="sr-only">{icon.label}</span>
+            </span>
+            <span className="font-medium">
+              {obs.temperature != null ? `${obs.temperature}°C` : "-"}
+            </span>
+            <span className="text-gray-500">습도 {obs.humidity ?? "-"}%</span>
+            <span className="text-gray-500">풍속 {obs.wind_speed ?? "-"}m/s</span>
+          </li>
+        );
+      })}
     </ul>
   );
 }

@@ -1,4 +1,5 @@
 import type { Observation } from "@/lib/api";
+import { weatherIcon } from "@/lib/weatherIcon";
 
 export default function WeatherCard({ observation }: { observation: Observation | null }) {
   if (!observation) {
@@ -9,12 +10,22 @@ export default function WeatherCard({ observation }: { observation: Observation 
     );
   }
 
+  const icon = weatherIcon(observation);
+
   return (
     <div className="rounded-xl border border-gray-200 p-6 shadow-sm">
       <h2 className="text-sm text-gray-500">{observation.station_id} 지점</h2>
-      <p className="text-4xl font-semibold">
-        {observation.temperature != null ? `${observation.temperature}°C` : "-"}
-      </p>
+      <div className="flex items-center gap-3">
+        <span className="text-5xl" aria-hidden="true">
+          {icon.emoji}
+        </span>
+        <div>
+          <p className="text-4xl font-semibold">
+            {observation.temperature != null ? `${observation.temperature}°C` : "-"}
+          </p>
+          <p className="text-sm text-gray-500">{icon.label}</p>
+        </div>
+      </div>
       <dl className="mt-4 grid grid-cols-2 gap-2 text-sm text-gray-600">
         <div>
           <dt>강수량</dt>

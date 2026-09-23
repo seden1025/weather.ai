@@ -98,6 +98,43 @@ export async function getForecast(stationId: string): Promise<Forecast[]> {
   return res.json();
 }
 
+export interface Prediction {
+  id: number;
+  station_id: string;
+  predict_date: string;
+  sky_condition: string;
+  wind_feel: string;
+  memo: string | null;
+  predicted_max_temp: number;
+  ai_predicted_max_temp: number | null;
+  actual_max_temp: number | null;
+  created_at: string;
+}
+
+export async function submitPrediction(
+  stationId: string,
+  body: {
+    sky_condition: string;
+    wind_feel: string;
+    predicted_max_temp: number;
+    memo?: string;
+  }
+): Promise<Prediction | null> {
+  const res = await fetch(`${API_BASE_URL}/predictions/${stationId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function getPredictions(stationId: string): Promise<Prediction[]> {
+  const res = await fetch(`${API_BASE_URL}/predictions/${stationId}`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function getAnomalyEvents(stationId?: string): Promise<AnomalyEvent[]> {
   const url = new URL(`${API_BASE_URL}/anomaly/events`);
   if (stationId) url.searchParams.set("station_id", stationId);

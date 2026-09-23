@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import anomaly, geocode, stations, weather
+from app.api.routes import anomaly, geocode, predictions, stations, weather
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
@@ -19,6 +19,7 @@ app.include_router(weather.router)
 app.include_router(anomaly.router)
 app.include_router(stations.router)
 app.include_router(geocode.router)
+app.include_router(predictions.router)
 
 
 @app.on_event("startup")

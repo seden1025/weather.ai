@@ -1,3 +1,5 @@
+import { authHeaders, readError } from "@/lib/auth";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export interface Observation {
@@ -107,6 +109,9 @@ export interface Prediction {
   memo: string | null;
   predicted_max_temp: number;
   predicted_sky_condition: string | null;
+  prediction_basis: string[] | null;
+  basis_detail: string | null;
+  reward_contact_registered: boolean;
   ai_predicted_max_temp: number | null;
   ai_predicted_sky_condition: string | null;
   actual_max_temp: number | null;
@@ -114,22 +119,51 @@ export interface Prediction {
   created_at: string;
 }
 
+export interface PredictionInput {
+  sky_condition: string;
+  wind_feel: string;
+  predicted_max_temp: number;
+  predicted_sky_condition?: string;
+  memo?: string;
+  prediction_basis?: string[];
+  basis_detail?: string;
+  reward_contact?: string;
+  contact_consent?: boolean;
+}
+
+export type SubmitResult = { ok: true; prediction: Prediction } | { ok: false; message: string };
+
 export async function submitPrediction(
   stationId: string,
-  body: {
-    sky_condition: string;
-    wind_feel: string;
-    predicted_max_temp: number;
-    predicted_sky_condition?: string;
-    memo?: string;
+  body: PredictionInput
+): Promise<SubmitResult> {
+  const fallback =
+    "제출에 실패했습니다. 잠시 후 다시 시도해주세요 (서버가 방금 깨어난 경우 최대 1분 걸릴 수 있어요).";
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}/predictions/${stationId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { ok: false, message: fallback };
   }
-): Promise<Prediction | null> {
-  const res = await fetch(`${API_BASE_URL}/predictions/${stationId}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    // 입력 오류(422)는 서버가 알려주는 문장(예: 전화번호 형식)을 그대로 보여준다.
+    const message = res.status === 422 ? await readError(res, fallback) : fallback;
+    return { ok: false, message };
+  }
+  return { ok: true, prediction: await res.json() };
+}
+
+/** 로그인한 사용자가 제출한 예측 기록. 로그인하지 않았거나 토큰이 만료되면 빈 배열. */
+export async function getMyPredictions(): Promise<Prediction[]> {
+  const res = await fetch(`${API_BASE_URL}/predictions/mine`, {
+    cache: "no-store",
+    headers: authHeaders(),
+  }).catch(() => null);
+  if (!res || !res.ok) return [];
   return res.json();
 }
 

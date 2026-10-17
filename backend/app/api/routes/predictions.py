@@ -5,10 +5,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user, get_current_user_optional
 from app.core.time import now_kst
 from app.db.session import get_db
 from app.models.observation import WeatherObservation
 from app.models.prediction import UserPrediction
+from app.models.user import User
 from app.schemas.prediction import PredictionIn, PredictionOut
 from app.services.prediction import predict_sky_condition, predict_temperature
 
@@ -58,6 +60,9 @@ def _to_out(db: Session, p: UserPrediction) -> PredictionOut:
         memo=p.memo,
         predicted_max_temp=p.predicted_max_temp,
         predicted_sky_condition=p.predicted_sky_condition,
+        prediction_basis=p.prediction_basis,
+        basis_detail=p.basis_detail,
+        reward_contact_registered=bool(p.reward_contact),
         ai_predicted_max_temp=p.ai_predicted_max_temp,
         ai_predicted_sky_condition=p.ai_predicted_sky_condition,
         actual_max_temp=_actual_max_temp(db, p.station_id, p.predict_date),
@@ -96,8 +101,33 @@ def _recent_observations_df(db: Session, station_id: str) -> pd.DataFrame | None
     )
 
 
+@router.get("/mine", response_model=list[PredictionOut])
+def list_my_predictions(
+    limit: int = 50,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """로그인한 사용자가 제출한 예측만 모아서 본다. (/{station_id}보다 먼저 선언해야 한다)"""
+    predictions = (
+        db.execute(
+            select(UserPrediction)
+            .where(UserPrediction.user_id == user.id)
+            .order_by(UserPrediction.created_at.desc())
+            .limit(min(max(limit, 1), 200))
+        )
+        .scalars()
+        .all()
+    )
+    return [_to_out(db, p) for p in predictions]
+
+
 @router.post("/{station_id}", response_model=PredictionOut)
-def create_prediction(station_id: str, body: PredictionIn, db: Session = Depends(get_db)):
+def create_prediction(
+    station_id: str,
+    body: PredictionIn,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_current_user_optional),
+):
     """관찰 기반 오늘의 최고기온·날씨 예측을 저장한다. 같은 시점 AI 예측값도 함께 기록한다."""
     today = now_kst().date()
     df = _recent_observations_df(db, station_id)
@@ -124,6 +154,11 @@ def create_prediction(station_id: str, body: PredictionIn, db: Session = Depends
         memo=body.memo,
         predicted_max_temp=body.predicted_max_temp,
         predicted_sky_condition=body.predicted_sky_condition,
+        prediction_basis=body.prediction_basis or None,
+        basis_detail=body.basis_detail,
+        user_id=user.id if user else None,
+        reward_contact=body.reward_contact,
+        contact_consent=bool(body.reward_contact and body.contact_consent),
         ai_predicted_max_temp=ai_temp,
         ai_predicted_sky_condition=ai_sky,
         created_at=now_kst(),

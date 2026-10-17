@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { useAuth } from "@/lib/auth";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 const LINKS = [
@@ -18,6 +20,7 @@ export default function Nav() {
   const [open, setOpen] = useState(false);
   const [waking, setWaking] = useState(false);
   const pathname = usePathname();
+  const { user, ready, logout } = useAuth();
 
   useEffect(() => {
     // 무료 호스팅은 오래 쉬면 서버가 잠드는데, 페이지를 열자마자 미리 깨워두면
@@ -47,6 +50,28 @@ export default function Nav() {
           {waking && (
             <span className="text-xs text-gray-400">서버 깨우는 중...</span>
           )}
+          {ready &&
+            (user ? (
+              <>
+                <span className="max-w-[8rem] truncate text-xs text-gray-500" title={user.email}>
+                  {user.email}
+                </span>
+                <button
+                  onClick={logout}
+                  className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                >
+                  로그아웃
+                </button>
+              </>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setOpen(false)}
+                className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+              >
+                로그인
+              </Link>
+            ))}
           <button
             onClick={() => setOpen((v) => !v)}
             aria-label="메뉴 열기"

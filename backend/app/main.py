@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import anomaly, geocode, predictions, stations, weather
+from app.api.routes import admin, anomaly, auth, geocode, predictions, stations, weather
 from app.core.config import settings
 from app.db.base import Base
+from app.db.migrate import ensure_prediction_columns
 from app.db.session import engine
+import app.models  # noqa: F401  (모든 모델을 Base.metadata에 등록)
 
 app = FastAPI(title="Weather AI API")
 
@@ -20,11 +22,14 @@ app.include_router(anomaly.router)
 app.include_router(stations.router)
 app.include_router(geocode.router)
 app.include_router(predictions.router)
+app.include_router(auth.router)
+app.include_router(admin.router)
 
 
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+    ensure_prediction_columns(engine)
 
 
 @app.get("/health")

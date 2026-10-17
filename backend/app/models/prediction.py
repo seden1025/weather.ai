@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -31,5 +31,16 @@ class UserPrediction(Base):
 
     ai_predicted_max_temp: Mapped[float | None] = mapped_column(Float, nullable=True)
     ai_predicted_sky_condition: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
+    # 예측 근거: 어떤 단서를 바탕으로 그렇게 예측했는가 (선택지 + 직접 서술)
+    prediction_basis: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    basis_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # 로그인한 상태에서 제출했다면 계정 연결 (비로그인 제출도 허용)
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    # 보상 안내용 연락처(이메일 또는 전화번호). 비공개 - API 응답으로 내보내지 않는다.
+    reward_contact: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contact_consent: Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False))
